@@ -1,55 +1,37 @@
 let keystrokes = []
 let mouseMoves = []
+let mouseClicks = 0
+let startTime = Date.now()
 
-document.addEventListener("keydown", function () {
-
-    let time = new Date().getTime()
-    keystrokes.push(time)
-
+document.addEventListener("keydown", function(e){
+    keystrokes.push(Date.now())
 })
 
-document.addEventListener("mousemove", function (e) {
-
+document.addEventListener("mousemove", function(e){
     mouseMoves.push({
         x: e.clientX,
         y: e.clientY,
-        time: new Date().getTime()
+        time: Date.now()
     })
-
 })
 
-setInterval(function () {
+document.addEventListener("click", function(){
+    mouseClicks++
+})
 
-    let typingSpeed = 0
-    let mouseSpeed = 0
+function calculateBehaviour(){
 
-    // Calculate typing speed
-    if (keystrokes.length > 1) {
+    if(keystrokes.length < 2) return
 
-        let duration = keystrokes[keystrokes.length - 1] - keystrokes[0]
+    let typingSpeed = keystrokes.length / ((Date.now()-startTime)/1000)
 
-        typingSpeed = keystrokes.length / (duration / 1000)
+    let keyDelay = (keystrokes[keystrokes.length-1] - keystrokes[0]) / keystrokes.length / 1000
 
-    }
+    let mouseSpeed = mouseMoves.length
 
-    // Calculate mouse speed
-    if (mouseMoves.length > 1) {
+    let clickRate = mouseClicks / ((Date.now()-startTime)/1000)
 
-        let dist = 0
-
-        for (let i = 1; i < mouseMoves.length; i++) {
-
-            let dx = mouseMoves[i].x - mouseMoves[i - 1].x
-            let dy = mouseMoves[i].y - mouseMoves[i - 1].y
-
-            dist += Math.sqrt(dx * dx + dy * dy)
-        }
-
-        let duration = mouseMoves[mouseMoves.length - 1].time - mouseMoves[0].time
-
-        mouseSpeed = dist / (duration / 1000)
-
-    }
+    let sessionTime = (Date.now()-startTime)/1000
 
     fetch("/behaviour", {
         method: "POST",
@@ -58,22 +40,19 @@ setInterval(function () {
         },
         body: JSON.stringify({
             typing_speed: typingSpeed,
-            mouse_speed: mouseSpeed
+            key_delay: keyDelay,
+            mouse_speed: mouseSpeed,
+            mouse_click_rate: clickRate,
+            session_time: sessionTime
         })
     })
-        .then(res => res.json())
-        .then(data => {
+    .then(res => res.json())
+    .then(data => {
+        if(data.action == "logout"){
+            alert("Suspicious behaviour detected. Session locked.")
+            window.location.href = "/login"
+        }
+    })
+}
 
-            if (data.status === "suspicious") {
-
-                alert("Suspicious behaviour detected! Vault locked.")
-                window.location = "/login"
-
-            }
-
-        })
-
-    keystrokes = []
-    mouseMoves = []
-
-}, 5000)
+setInterval(calculateBehaviour, 5000)

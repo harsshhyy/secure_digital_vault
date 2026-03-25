@@ -1,48 +1,54 @@
-import numpy as np
+import csv
 import os
-import pickle
-
-DATA_FILE = "behaviour_data.pkl"
 
 
 class BehaviourDataset:
 
     def __init__(self):
 
-        if os.path.exists(DATA_FILE):
+        self.dataset_file = "behaviour_data.csv"
 
-            with open(DATA_FILE, "rb") as f:
-                self.data = pickle.load(f)
+        if not os.path.exists(self.dataset_file):
 
-        else:
-            self.data = []
+            with open(self.dataset_file, "w", newline="") as f:
 
+                writer = csv.writer(f)
 
-    # -----------------------------
-    # Add Feature Sample
-    # -----------------------------
-
-    def add_sample(self, feature_vector):
-
-        self.data.append(feature_vector)
-
-        self.save()
-
+                writer.writerow([
+                    "typing_speed",
+                    "key_delay",
+                    "mouse_speed",
+                    "mouse_click_rate",
+                    "session_time"
+                ])
 
     # -----------------------------
-    # Save Dataset
+    # Add New Behaviour Sample
     # -----------------------------
 
-    def save(self):
+    def add_sample(self, features):
 
-        with open(DATA_FILE, "wb") as f:
-            pickle.dump(self.data, f)
+        with open(self.dataset_file, "a", newline="") as f:
 
+            writer = csv.writer(f)
+
+            writer.writerow(features)
 
     # -----------------------------
     # Load Dataset
     # -----------------------------
 
-    def get_dataset(self):
+    def load(self):
 
-        return np.array(self.data)
+        data = []
+
+        with open(self.dataset_file, "r") as f:
+
+            reader = csv.reader(f)
+
+            next(reader)
+
+            for row in reader:
+                data.append([float(x) for x in row])
+
+        return data

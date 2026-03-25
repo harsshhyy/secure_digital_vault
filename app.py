@@ -6,60 +6,67 @@ import io
 from flask_bcrypt import Bcrypt
 from cryptography.fernet import Fernet
 
-import numpy as np
-
 # Project modules
 from behaviour_ml_pipeline import BehaviourModel
 from behaviour_dataset import BehaviourDataset
 
+# -----------------------------
 # Flask Setup
+# -----------------------------
 
 app = Flask(__name__)
 app.secret_key = "vault_secret_key"
 
 bcrypt = Bcrypt(app)
 
-# Upload folder
 UPLOAD_FOLDER = "vault_files"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
-# Ensure folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # -----------------------------
 # Encryption Key
 # -----------------------------
 
-# Prototype project uses runtime key
-key = Fernet.generate_key()
+if not os.path.exists("key.key"):
+    key = Fernet.generate_key()
+    with open("key.key", "wb") as f:
+        f.write(key)
+
+with open("key.key", "rb") as f:
+    key = f.read()
+
 cipher = Fernet(key)
 
-
+# -----------------------------
 # ML Components
-
+# -----------------------------
 
 behaviour_model = BehaviourModel()
 behaviour_dataset = BehaviourDataset()
 
-# Load trained model if exists
+# Load trained model safely
+model_loaded = False
+
 try:
     behaviour_model.load()
-    print("Behaviour model loaded")
-except:
-    print("New behaviour model instance")
+    model_loaded = True
+    print("✅ Behaviour model loaded")
+except Exception as e:
+    print("⚠ No trained model found:", e)
 
-# Database Connection
+# -----------------------------
+# Database
+# -----------------------------
 
 def get_db():
     conn = sqlite3.connect("database.db")
     conn.row_factory = sqlite3.Row
     return conn
 
-# Create User Table
 
 def create_table():
     conn = get_db()
-
     conn.execute("""
     CREATE TABLE IF NOT EXISTS users(
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -68,76 +75,86 @@ def create_table():
         password TEXT
     )
     """)
-
     conn.commit()
     conn.close()
 
+
 create_table()
 
+# -----------------------------
 # Routes
+# -----------------------------
 
 @app.route("/")
 def home():
-    return render_template("login.html")
+    return redirect("/login")
 
+
+# -----------------------------
 # Register
+# -----------------------------
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
 
     if request.method == "POST":
 
-        username = request.form["username"]
-        email = request.form["email"]
-        password = request.form["password"]
+        username = request.form.get("username")
+        email = request.form.get("email")
+        password = request.form.get("password")
 
-        hashed_password = bcrypt.generate_password_hash(password).decode("utf-8")
+        hashed = bcrypt.generate_password_hash(password).decode("utf-8")
 
         conn = get_db()
-
         conn.execute(
             "INSERT INTO users(username,email,password) VALUES(?,?,?)",
-            (username, email, hashed_password)
+            (username, email, hashed)
         )
-
         conn.commit()
         conn.close()
 
-        return redirect("/")
+        return redirect("/login")
 
     return render_template("register.html")
 
-# Login
 
-@app.route("/login", methods=["POST"])
+# -----------------------------
+# Login
+# -----------------------------
+
+@app.route("/login", methods=["GET", "POST"])
 def login():
 
-    email = request.form["email"]
-    password = request.form["password"]
+    if request.method == "POST":
 
-    conn = get_db()
+        email = request.form.get("email")
+        password = request.form.get("password")
 
-    user = conn.execute(
-        "SELECT * FROM users WHERE email=?", (email,)
-    ).fetchone()
+        conn = get_db()
+        user = conn.execute(
+            "SELECT * FROM users WHERE email=?",
+            (email,)
+        ).fetchone()
+        conn.close()
 
-    conn.close()
+        if user and bcrypt.check_password_hash(user["password"], password):
+            session["user"] = user["username"]
+            return redirect("/dashboard")
 
-    if user and bcrypt.check_password_hash(user["password"], password):
+        return "Invalid login"
 
-        session["user"] = user["username"]
+    return render_template("login.html")
 
-        return redirect("/dashboard")
 
-    return "Invalid Login"
-
+# -----------------------------
 # Dashboard
+# -----------------------------
 
 @app.route("/dashboard")
 def dashboard():
 
     if "user" not in session:
-        return redirect("/")
+        return redirect("/login")
 
     files = os.listdir(app.config["UPLOAD_FOLDER"])
 
@@ -148,83 +165,134 @@ def dashboard():
     )
 
 
+# -----------------------------
 # Logout
+# -----------------------------
 
 @app.route("/logout")
 def logout():
+    session.clear()
+    return redirect("/login")
 
-    session.pop("user", None)
-    return redirect("/")
 
-# Upload File
+# -----------------------------
+# Upload File (Encrypted)
+# -----------------------------
 
 @app.route("/upload", methods=["POST"])
 def upload():
 
     if "user" not in session:
-        return redirect("/")
+        return redirect("/login")
 
-    file = request.files["file"]
+    file = request.files.get("file")
 
     if file:
-
         data = file.read()
+        encrypted = cipher.encrypt(data)
 
-        encrypted_data = cipher.encrypt(data)
-
-        path = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
+        path = os.path.join(
+            app.config["UPLOAD_FOLDER"],
+            file.filename
+        )
 
         with open(path, "wb") as f:
-            f.write(encrypted_data)
+            f.write(encrypted)
 
     return redirect("/dashboard")
 
-# Download File
+
+# -----------------------------
+# Download File (Decrypted)
+# -----------------------------
 
 @app.route("/download/<filename>")
 def download(filename):
 
     if "user" not in session:
-        return redirect("/")
+        return redirect("/login")
 
-    path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+    path = os.path.join(
+        app.config["UPLOAD_FOLDER"],
+        filename
+    )
 
     with open(path, "rb") as f:
-        encrypted_data = f.read()
+        encrypted = f.read()
 
-    decrypted_data = cipher.decrypt(encrypted_data)
+    decrypted = cipher.decrypt(encrypted)
 
     return send_file(
-        io.BytesIO(decrypted_data),
+        io.BytesIO(decrypted),
         download_name=filename,
         as_attachment=True
     )
 
-# Behaviour Prediction API
+
+# -----------------------------
+# Behaviour Detection API (FINAL)
+# -----------------------------
 
 @app.route("/behaviour", methods=["POST"])
 def behaviour():
 
+    if "user" not in session:
+        return jsonify({
+            "status": "no_session",
+            "action": "logout"
+        })
+
     data = request.get_json()
 
     typing_speed = data.get("typing_speed", 0)
+    key_delay = data.get("key_delay", 0)
     mouse_speed = data.get("mouse_speed", 0)
+    mouse_click_rate = data.get("mouse_click_rate", 0)
+    session_time = data.get("session_time", 0)
 
     feature_vector = [
         typing_speed,
-        mouse_speed
+        key_delay,
+        mouse_speed,
+        mouse_click_rate,
+        session_time
     ]
 
-    result = behaviour_model.predict(feature_vector)
+    print("📊 Feature Vector:", feature_vector)
 
-    # Adaptive learning buffer
+    # Predict safely
+    if model_loaded:
+        try:
+            result = behaviour_model.predict(feature_vector)
+        except Exception as e:
+            print("Prediction error:", e)
+            result = "normal"
+    else:
+        result = "normal"
+
+    print("🧠 Prediction:", result)
+
+    # Adaptive learning
     if result == "normal":
         behaviour_dataset.add_sample(feature_vector)
 
+    # SECURITY ACTION
+    if result == "anomaly":
+        session.clear()
+        return jsonify({
+            "status": "anomaly",
+            "action": "logout"
+        })
+
     return jsonify({
-        "status": result
+        "status": "normal",
+        "action": "ok"
     })
 
+
+# -----------------------------
+# Run App
+# -----------------------------
 
 if __name__ == "__main__":
     app.run(debug=True)

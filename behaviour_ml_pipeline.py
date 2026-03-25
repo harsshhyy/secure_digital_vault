@@ -1,75 +1,66 @@
-import numpy as np
-from sklearn.ensemble import IsolationForest
-import pickle
+import joblib
+import os
 
-# ===============================
-# Behaviour ML Model Class
-# ===============================
+from sklearn.ensemble import IsolationForest
+
 
 class BehaviourModel:
 
     def __init__(self):
 
-        # Anomaly detection model
+        self.model = None
+
+        self.model_path = "behaviour_model.pkl"
+
+    # -----------------------------
+    # Train Model
+    # -----------------------------
+
+    def train(self, data):
+
         self.model = IsolationForest(
+
             n_estimators=100,
-            contamination=0.05,
+            contamination=0.1,
             random_state=42
+
         )
 
-        self.trained = False
+        self.model.fit(data)
 
+        self.save()
 
-    # ---------------------------
-    # Training Function
-    # ---------------------------
-
-    def train(self, X):
-
-        """
-        X → numpy array of behaviour feature vectors
-        """
-
-        self.model.fit(X)
-        self.trained = True
-
-
-    # ---------------------------
-    # Prediction Function
-    # ---------------------------
-
-    def predict(self, feature_vector):
-
-        if not self.trained:
-            return "model_not_trained"
-
-        feature_vector = np.array(feature_vector).reshape(1, -1)
-
-        result = self.model.predict(feature_vector)
-
-        if result[0] == -1:
-            return "intruder"
-
-        return "normal"
-
-
-    # ---------------------------
+    # -----------------------------
     # Save Model
-    # ---------------------------
+    # -----------------------------
 
-    def save(self, path="behaviour_model.pkl"):
+    def save(self):
 
-        with open(path, "wb") as f:
-            pickle.dump(self.model, f)
+        joblib.dump(self.model, self.model_path)
 
-
-    # ---------------------------
+    # -----------------------------
     # Load Model
-    # ---------------------------
+    # -----------------------------
 
-    def load(self, path="behaviour_model.pkl"):
+    def load(self):
 
-        with open(path, "rb") as f:
-            self.model = pickle.load(f)
+        if not os.path.exists(self.model_path):
+            raise Exception("Model not found")
 
-        self.trained = True
+        self.model = joblib.load(self.model_path)
+
+    # -----------------------------
+    # Predict Behaviour
+    # -----------------------------
+
+    def predict(self, features):
+
+        if self.model is None:
+            return "unknown"
+
+        result = self.model.predict([features])[0]
+
+        if result == 1:
+            return "normal"
+
+        return "anomaly"

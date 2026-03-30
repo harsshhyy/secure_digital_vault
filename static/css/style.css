@@ -5,7 +5,7 @@ body {
     margin: 0;
 }
 
-/* Center container */
+/* Center container (login/auth pages) */
 .auth-container {
     height: 100vh;
     display: flex;
@@ -74,19 +74,56 @@ body {
     text-decoration: none;
 }
 
-/* Main container */
-.container {
-    padding: 40px;
-    display: flex;
-    gap: 40px;
+.logout-btn:hover {
+    text-decoration: underline;
 }
 
-/* Boxes */
+/* Main container */
+.container {
+    display: flex;
+    height: calc(100vh - 68px); /* full height minus navbar */
+}
+
+/* 🗂 Side Menu */
+.side-menu {
+    width: 220px;
+    background-color: #161b22;
+    border-right: 1px solid #30363d;
+    display: flex;
+    flex-direction: column;
+    padding-top: 1rem;
+}
+
+.side-menu a {
+    color: #c9d1d9;
+    text-decoration: none;
+    padding: 0.75rem 1.5rem;
+    display: block;
+    transition: background 0.2s;
+}
+
+.side-menu a:hover,
+.side-menu a.active {
+    background-color: #21262d;
+    color: #58a6ff;
+}
+
+/* 🖥 Main content */
+.main-content {
+    flex: 1;
+    padding: 2rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+/* Boxes inside main content */
 .upload-box, .files-box {
     background: #161b22;
     padding: 20px;
     border-radius: 8px;
-    flex: 1;
+    border: 1px solid #30363d;
 }
 
 /* File list */
@@ -100,4 +137,47 @@ body {
     justify-content: space-between;
     padding: 10px;
     border-bottom: 1px solid #30363d;
+}
+
+/* Inputs and buttons inside main content */
+input, textarea, button {
+    width: 100%;
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    border-radius: 6px;
+    border: 1px solid #30363d;
+    background-color: #0d1117;
+    color: #c9d1d9;
+}
+
+button {
+    cursor: pointer;
+    background-color: #21262d;
+    border: none;
+    color: #58a6ff;
+}
+
+button:hover {
+    background-color: #30363d;
+}
+
+/* Debug Panel */
+#debugPanel {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #161b22;
+    padding: 15px;
+    border-radius: 10px;
+    font-size: 13px;
+    color: #c9d1d9;
+    box-shadow: 0 0 15px rgba(0,0,0,0.6);
+    opacity: 0.9;
+    z-index: 999;
+}
+
+#debugPanel h4 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    color: #58a6ff;
 }

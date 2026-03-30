@@ -1,50 +1,230 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <title>Secure Vault</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Secure Vault Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
 
+<!-- 🔝 NAVBAR -->
 <div class="navbar">
     <h2>🔐 Secure Vault</h2>
     <div>
-        <span>Welcome, {{ user }}</span>
+        Welcome, {{ user }}
         <a href="/logout" class="logout-btn">Logout</a>
     </div>
 </div>
 
+<!-- 🖥 MAIN CONTAINER -->
 <div class="container">
 
-    <div class="upload-box">
-        <h3>Upload File</h3>
-        <form action="/upload" method="POST" enctype="multipart/form-data">
-            <input type="file" name="file" required>
-            <button type="submit">Upload</button>
-        </form>
+    <!-- 📌 SIDE MENU -->
+    <div class="side-menu">
+        <a href="#" class="menu-link active" data-page="profile">Profile</a>
+        <a href="#" class="menu-link" data-page="documents">My Documents</a>
+        <a href="#" class="menu-link" data-page="secure_shares">Secure Shares</a>
+        <a href="#" class="menu-link" data-page="activity_logs">Activity Logs</a>
+        <a href="#" class="menu-link" data-page="vault_settings">Vault Settings</a>
     </div>
 
-    <div class="files-box">
-        <h3>Your Files</h3>
+    <!-- 📄 MAIN CONTENT AREA -->
+    <div class="main-content" id="mainContent">
 
-        {% if files %}
-            <ul>
-                {% for file in files %}
-                    <li>
-                        {{ file }}
-                        <a href="/download/{{ file }}">Download</a>
-                    </li>
-                {% endfor %}
-            </ul>
-        {% else %}
-            <p>No files uploaded yet</p>
-        {% endif %}
+        <!-- PROFILE PAGE -->
+        <div id="profile" class="page">
+            <h2>Profile</h2>
+            <div class="profile-section">
+                <img src="{{ profile_pic }}" id="profilePic" class="profile-pic" alt="Profile Picture">
+                <input type="file" id="profilePicUpload" style="margin-top:10px;">
+                <p>Name: <span id="displayName">{{ user }}</span> <button onclick="editName()">Edit</button></p>
+                <p>Email: <span id="email">{{ email }}</span> <button onclick="editEmail()">Edit</button></p>
+                <p>Total Files: <span id="totalFiles">{{ total_files }}</span></p>
+                <p>Total Notes: <span id="totalNotes">{{ total_notes }}</span></p>
+            </div>
+        </div>
+
+        <!-- MY DOCUMENTS PAGE -->
+        <div id="documents" class="page" style="display:none;">
+            <h2>My Documents</h2>
+            <input type="text" id="searchFiles" placeholder="Search files..." onkeyup="filterFiles()">
+            <table id="fileTable">
+                <thead>
+                    <tr>
+                        <th><input type="checkbox" onclick="toggleSelectAll(this)"></th>
+                        <th>Filename</th>
+                        <th>Tags</th>
+                        <th>Upload Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="fileTableBody">
+                    {% for file in files %}
+                    <tr>
+                        <td><input type="checkbox" class="fileCheckbox" data-id="{{ file.id }}"></td>
+                        <td>{{ file.name }}</td>
+                        <td>{{ file.tags }}</td>
+                        <td>{{ file.upload_date }}</td>
+                        <td>
+                            <button onclick="previewFile('{{ file.id }}')">Preview</button>
+                            <a href="/download/{{ file.id }}">⬇</a>
+                            <button onclick="deleteFile('{{ file.id }}')">Delete</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="upload-box">
+                <h3>Upload File</h3>
+                <form action="/upload" method="POST" enctype="multipart/form-data">
+                    <input type="file" name="file">
+                    <input type="text" name="filename" placeholder="Rename file">
+                    <input type="text" name="tags" placeholder="Add tags">
+                    <button type="submit">Upload</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- SECURE SHARES PAGE -->
+        <div id="secure_shares" class="page" style="display:none;">
+            <h2>Secure Shares</h2>
+            <div>
+                <input type="text" id="shareUsername" placeholder="Enter username/email">
+                <button onclick="shareSelectedFile()">Share Selected File</button>
+            </div>
+            <div class="share-tabs">
+                <button onclick="switchShareTab('sharedWithMe')">Shared With Me</button>
+                <button onclick="switchShareTab('sharedByMe')">Shared By Me</button>
+            </div>
+            <ul id="sharedFilesList"></ul>
+        </div>
+
+        <!-- ACTIVITY LOGS PAGE -->
+        <div id="activity_logs" class="page" style="display:none;">
+            <h2>Activity Logs</h2>
+            <div>
+                <input type="date" id="logDateFilter" onchange="filterLogs()">
+                <select id="logTypeFilter" onchange="filterLogs()">
+                    <option value="">All Types</option>
+                    <option value="login">Login</option>
+                    <option value="file">File</option>
+                    <option value="note">Note</option>
+                </select>
+                <input type="text" id="logSearch" placeholder="Search logs..." onkeyup="filterLogs()">
+            </div>
+            <ul id="activityList"></ul>
+            <button onclick="exportLogs()">Export Logs CSV</button>
+        </div>
+
+        <!-- VAULT SETTINGS PAGE -->
+        <div id="vault_settings" class="page" style="display:none;">
+            <h2>Vault Settings</h2>
+            <form id="settingsForm">
+                <label>
+                    2FA:
+                    <input type="checkbox" id="twoFA" onchange="toggle2FA(this.checked)">
+                </label>
+                <div>
+                    <h4>Security Questions</h4>
+                    <input type="text" id="q1" placeholder="Childhood nickname">
+                    <input type="text" id="q2" placeholder="First pet's name">
+                    <button type="button" onclick="updateSecurityQuestions()">Save Questions</button>
+                </div>
+                <label>
+                    Change Password:
+                    <input type="password" id="changePassword" placeholder="New password">
+                </label>
+                <button type="submit">Save Settings</button>
+            </form>
+            <h4>Recent Logins</h4>
+            <ul id="loginHistory"></ul>
+        </div>
 
     </div>
 
 </div>
 
-<script src="{{ url_for('static', filename='js/behaviour.js') }}"></script>
+<!-- 🔐 JS FUNCTIONALITY -->
+<script src="/static/behaviour.js"></script>
+<script>
+// ------------------- SIDE MENU NAVIGATION -------------------
+const menuLinks = document.querySelectorAll(".menu-link");
+const pages = document.querySelectorAll(".page");
+
+menuLinks.forEach(link => {
+    link.addEventListener("click", (e) => {
+        e.preventDefault();
+        menuLinks.forEach(l => l.classList.remove("active"));
+        pages.forEach(p => p.style.display = "none");
+        link.classList.add("active");
+        const pageId = link.dataset.page;
+        document.getElementById(pageId).style.display = "block";
+
+        if(pageId === "secure_shares") loadSharedFiles();
+        if(pageId === "activity_logs") loadActivityLogs();
+    });
+});
+
+// ------------------- PROFILE FUNCTIONALITY -------------------
+document.getElementById("profilePicUpload").addEventListener("change", function(){
+    const file = this.files[0];
+    const formData = new FormData();
+    formData.append("profile_pic", file);
+    fetch("/update_profile_pic", { method: "POST", body: formData })
+        .then(res => res.json())
+        .then(data => { if(data.success) document.getElementById("profilePic").src = data.url; });
+});
+
+function editName(){
+    const newName = prompt("Enter new display name:");
+    if(newName) fetch("/update_name",{method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name:newName})})
+        .then(res=>res.json()).then(d=>{if(d.success) document.getElementById("displayName").innerText=newName;});
+}
+
+function editEmail(){
+    const newEmail = prompt("Enter new email:");
+    if(newEmail) fetch("/update_email",{method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({email:newEmail})})
+        .then(res=>res.json()).then(d=>{if(d.success) document.getElementById("email").innerText=newEmail;});
+}
+
+// ------------------- DOCUMENTS FUNCTIONALITY -------------------
+function filterFiles(){
+    const filter = document.getElementById("searchFiles").value.toLowerCase();
+    document.querySelectorAll("#fileTableBody tr").forEach(tr=>{
+        tr.style.display = tr.innerText.toLowerCase().includes(filter) ? "" : "none";
+    });
+}
+
+function toggleSelectAll(box){
+    const checked = box.checked;
+    document.querySelectorAll(".fileCheckbox").forEach(cb=>cb.checked=checked);
+}
+
+function previewFile(id){ /* fetch preview modal from backend */ }
+function deleteFile(id){ if(confirm("Delete this file?")) fetch(`/delete_file/${id}`,{method:"DELETE"})
+    .then(res=>res.json()).then(d=>{if(d.success) location.reload();}); }
+
+// ------------------- SECURE SHARES -------------------
+function shareSelectedFile(){ /* POST share selected file */ }
+function switchShareTab(tab){ /* Load Shared With Me / Shared By Me */ }
+function loadSharedFiles(){ /* fetch and populate sharedFilesList */ }
+
+// ------------------- ACTIVITY LOGS -------------------
+function loadActivityLogs(){ /* fetch and populate activityList */ }
+function filterLogs(){ /* filter logs dynamically */ }
+function exportLogs(){ /* fetch logs CSV */ }
+
+// ------------------- VAULT SETTINGS -------------------
+function toggle2FA(enabled){ fetch("/toggle_2fa",{method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({enabled})}); }
+function updateSecurityQuestions(){ /* POST new questions */ }
+
+document.getElementById("settingsForm").addEventListener("submit",(e)=>{
+    e.preventDefault();
+    const password = document.getElementById("changePassword").value;
+    fetch("/update_settings",{method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({password})})
+    .then(res=>res.json()).then(data=>alert(data.message));
+});
+</script>
 
 </body>
 </html>
